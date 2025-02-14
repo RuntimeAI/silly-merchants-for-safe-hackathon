@@ -1,0 +1,107 @@
+from typing import Dict, Any
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+import yaml
+
+class Config:
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Config, cls).__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        if not self._initialized:
+            self._load_config()
+            self._initialized = True
+    
+    def _load_config(self):
+        """Load configuration from .env and config.yaml"""
+        # Load environment variables from .env
+        env_path = Path(__file__).parent.parent.parent / '.env'
+        load_dotenv(env_path)
+        
+        # Load YAML config
+        config_path = Path(__file__).parent.parent.parent / 'config.yaml'
+        with open(config_path, 'r') as f:
+            self._config = yaml.safe_load(f)
+        
+        # Set required environment variables
+        self.required_env = {
+            'OPENROUTER_API_KEY': os.getenv('OPENROUTER_API_KEY'),
+            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
+            'GEMINI_API_KEY': os.getenv('GEMINI_API_KEY'),
+        }
+        
+        # Validate required environment variables
+        self._validate_env()
+        
+        # Setup proxy if configured
+        if self.network_config.get('proxy'):
+            os.environ['HTTPS_PROXY'] = self.network_config['proxy']
+            os.environ['HTTP_PROXY'] = self.network_config['proxy']
+    
+    def _validate_env(self):
+        """Validate required environment variables"""
+        missing = [k for k, v in self.required_env.items() if not v]
+        if missing:
+            raise EnvironmentError(
+                f"Missing required environment variables: {', '.join(missing)}\n"
+                f"Please create a .env file with these variables."
+            )
+    
+    def get_api_key(self, provider: str) -> str:
+        """Get API key from environment variables"""
+        key = os.getenv(f'{provider.upper()}_API_KEY')
+        if not key:
+            raise ValueError(f"No API key found for {provider}")
+        return key
+    
+    def get_space_config(self, space_name: str) -> Dict[str, Any]:
+        """Get configuration for a specific space"""
+        spaces = self._config.get('spaces', {})
+        if space_name not in spaces:
+            raise ValueError(f"No configuration found for space: {space_name}")
+        return spaces[space_name]
+    
+    @property
+    def llm_config(self) -> Dict[str, Any]:
+        return self._config.get('llm', {})
+    
+    @property
+    def logging_config(self) -> Dict[str, Any]:
+        return self._config.get('logging', {})
+    
+    @property
+    def game_config(self) -> Dict[str, Any]:
+        return self._config.get('game', {})
+    
+    @property
+    def network_config(self) -> Dict[str, Any]:
+        return self._config.get('network', {})
+    
+    @property
+    def spaces_config(self) -> Dict[str, Any]:
+        return self._config.get('spaces', {})
+
+    def _load_llm_config(self) -> Dict[str, Any]:
+        return {
+            "default_provider": "gemini",
+            "models": {
+                "player1": {
+                    "default": "gemini-2.0-flash",
+                    "backup": "gemini-2.0-flash-lite-preview-02-05",
+                    "max_tokens": 1024,
+                    "temperature": 0.7
+                },
+                "player2": {
+                    "default": "gemini-2.0-flash",
+                    "backup": "gemini-2.0-flash-lite-preview-02-05",
+                    "max_tokens": 1024,
+                    "temperature": 0.7
+                }
+            }
+        } 
