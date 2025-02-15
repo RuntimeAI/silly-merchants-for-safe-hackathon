@@ -10,23 +10,29 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Player1(NegotiationAgent):
-    def __init__(self, name: str, strategy_advisory: str = None):
-        config = Config()
-        model_config = config.llm_config['models']['player1']
-        super().__init__(
-            name=name,
-            model=model_config['default'],
-            backup_model=model_config['backup'],
-            llm_provider=FallbackProvider()
-        )
-        self.strategy_advisory = strategy_advisory or """
-        Default strategy for Marco Polo:
-        - Build trust early but be cautious
-        - Focus on long-term gains
-        - Be adaptive to opponent's behavior
-        - Balance cooperation and competition
+    def __init__(self, name: str):
+        # Call parent constructor first
+        super().__init__(name)
+        
+        # Initialize strategy
+        self.strategy_advisory = """
+        Strategy for Marco Polo:
+        - Build trust in early rounds
+        - Be cautious with large transfers
+        - Look for opportunities to cooperate
+        - Consider betrayal only if heavily betrayed
         """
-    
+        self.logger.info(f"Player1 {name} initialized with default strategy")
+
+    def set_strategy(self, strategy: str):
+        """Set the strategy for this player"""
+        if not strategy or not strategy.strip():
+            self.logger.warning("Empty strategy provided, keeping default strategy")
+            return
+            
+        self.strategy_advisory = strategy
+        self.logger.info(f"Strategy set for {self.name}: {strategy[:100]}...")
+
     def _get_role_prompt(self) -> str:
         return NegotiationPrompts.PLAYER1_BASE
 
@@ -38,7 +44,7 @@ class Player1(NegotiationAgent):
             f"Other players' status:\n{context['player_statuses']}\n\n"
             "=== DEEP THINKING (Private Analysis) ===\n"
             "As Marco Polo, analyze the current situation. This is your private thought process that others cannot see.\n\n"
-            f"Strategic Advisory:\n{self.strategy_advisory}\n\n"
+            f"Strategic Advisory:\n{context['strategy']}\n\n"
             "Consider and analyze deeply:\n"
             "1. Trust Assessment:\n"
             "   - Analyze Trader Joe's past behavior patterns\n"
@@ -86,7 +92,8 @@ class Player1(NegotiationAgent):
             try:
                 context = {
                     'round': kwargs.get('round'),
-                    'player_statuses': kwargs.get('player_statuses', {})
+                    'player_statuses': kwargs.get('player_statuses', {}),
+                    'strategy': self.strategy_advisory
                 }
                 
                 # Phase 1: Deep Strategic Thinking (Private)
@@ -132,45 +139,53 @@ class Player1(NegotiationAgent):
             
         raise ValueError(f"Unknown action: {action}")
 
-    def generate_thinking(self) -> str:
+    def generate_thinking(self, strategy: str = None) -> str:
         """Generate deep strategic thinking"""
+        strategy = strategy or self.strategy_advisory
         context = {
             'round': self.round,
-            'player_statuses': self.get_player_statuses()
+            'player_statuses': self.get_player_statuses(),
+            'strategy': strategy
         }
         thinking_prompt = self._get_thinking_prompt(context)
         thinking = self.generate_response(thinking_prompt, temperature=0.9)
         return thinking
 
-    def generate_action(self) -> Dict[str, Any]:
-        """Generate action based on thinking"""
+    def generate_action(self, strategy: str = None) -> Dict[str, Any]:
+        """Generate action based on strategy"""
+        strategy = strategy or self.strategy_advisory
         context = {
             'round': self.round,
-            'player_statuses': self.get_player_statuses()
+            'player_statuses': self.get_player_statuses(),
+            'strategy': strategy
         }
         action_prompt = self._get_action_prompt(context)
-        response = self.generate_response(action_prompt, temperature=0.7)
-        
         try:
-            action_dict = json.loads(response)
-            return action_dict
-        except json.JSONDecodeError:
+            response = self.generate_response(action_prompt, temperature=0.7)
+            action = json.loads(response)
             return {
-                "message": "Error processing response",
+                "message": action.get("message", "No message"),
+                "transfers": action.get("transfers", [])
+            }
+        except Exception as e:
+            self.logger.error(f"Error generating action: {str(e)}")
+            return {
+                "message": "Error occurred while deciding action",
                 "transfers": []
             }
 
 class Player2(NegotiationAgent):
     def __init__(self, name: str):
+        # Call parent constructor first
+        super().__init__(name)
+        self.logger.info(f"Player2 {name} initialized")
+        
+        # Override model config with player2-specific config
         config = Config()
         model_config = config.llm_config['models']['player2']
-        super().__init__(
-            name=name,
-            model=model_config['default'],
-            backup_model=model_config['backup'],
-            llm_provider=FallbackProvider()
-        )
-    
+        self.model = model_config['default']
+        self.backup_model = model_config['backup']
+
     def _get_role_prompt(self) -> str:
         return NegotiationPrompts.PLAYER2_BASE
 

@@ -1,19 +1,30 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from ....utils.llm_providers.openrouter import OpenRouterProvider
 from ....utils.config import Config
 import logging
+from src.utils.logger import GameLogger
+from src.utils.llm_providers.fallback import FallbackProvider
 
 logger = logging.getLogger(__name__)
 
 class NegotiationAgent:
-    def __init__(self, name: str, model: str = None, backup_model: str = None, llm_provider = None):
+    def __init__(self, name: str):
+        config = Config()
+        model_config = config.llm_config['models']['player1']  # Default to player1 config
+        
         self.name = name
         self.coins = 10  # Starting coins
-        self.llm_provider = llm_provider
-        self.model = model
-        self.backup_model = backup_model
-        self.round = 1  # Add round tracking
-        self._role_prompt = self._get_role_prompt()
+        self.round = 1
+        
+        # Initialize logger
+        self.logger = GameLogger(f"agent_{name}")
+        
+        # Initialize LLM provider
+        self.model = model_config['default']
+        self.backup_model = model_config['backup']
+        self.llm_provider = FallbackProvider()
+        
+        self.logger.info(f"Agent {name} initialized with {self.coins} coins")
     
     def _get_role_prompt(self) -> str:
         """Override this method to provide role-specific prompt"""
@@ -30,21 +41,29 @@ class NegotiationAgent:
         return f"{self.name} has {self.coins} coins"
     
     def generate_response(self, prompt: str, temperature: float = 0.7) -> str:
-        """Generate response using LLM provider"""
+        """Generate response using LLM"""
         try:
-            # Pass only the prompt and temperature, not the model names
-            return self.llm_provider.generate(
+            response = self.llm_provider.generate(
+                model=self.model,
                 prompt=prompt,
-                system_prompt=self._get_role_prompt(),
                 temperature=temperature
             )
+            return response
         except Exception as e:
-            logger.error(f"Error generating response for {self.name}: {str(e)}")
-            raise 
+            self.logger.error(f"Error generating response: {str(e)}")
+            # Try backup model
+            try:
+                self.logger.info(f"Trying backup model {self.backup_model}")
+                response = self.llm_provider.generate(
+                    model=self.backup_model,
+                    prompt=prompt,
+                    temperature=temperature
+                )
+                return response
+            except Exception as e:
+                self.logger.error(f"Backup model failed: {str(e)}")
+                raise
 
     def get_player_statuses(self) -> Dict[str, int]:
         """Get current player statuses"""
-        return {
-            "Marco Polo": self.coins,  # This is simplified, should get from game state
-            "Trader Joe": 10  # This is simplified, should get from game state
-        } 
+        return {"coins": self.coins} 

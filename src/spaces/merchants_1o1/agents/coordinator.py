@@ -8,38 +8,30 @@ from ....utils.logger import logger
 
 class CoordinatorAgent(NegotiationAgent):
     def __init__(self, name: str):
+        super().__init__(name)
+        
+        # Override model config with coordinator-specific config
         config = Config()
         model_config = config.llm_config['models']['coordinator']
-        super().__init__(
-            name=name,
-            model=model_config['default'],
-            backup_model=model_config['backup'],
-            llm_provider=OpenRouterProvider()
-        )
-    
+        self.model = model_config['default']
+        self.backup_model = model_config['backup']
+        
+        self.logger.info(f"Coordinator {name} initialized")
+
     def _get_role_prompt(self) -> str:
-        return """You are an entertaining bilingual game show host for this PvP negotiation game.
-        Your style should be engaging and dramatic, similar to a variety show host.
+        return """You are the coordinator for a trading game.
+        Your role is to facilitate negotiations and ensure fair play.
+        Be objective and impartial in your assessments."""
 
-        Key Responsibilities:
-        - Format and validate player responses
-        - Ensure game rules are followed
-        - Track coin transfers and balances
-        - Maintain game integrity
+    def evaluate_round(self, round_num: int, player_statuses: Dict[str, Any]) -> str:
+        """Evaluate the current round state"""
+        prompt = (
+            f"Round {round_num} Status:\n"
+            f"Player standings: {player_statuses}\n\n"
+            "Provide a brief, impartial analysis of the current game state."
+        )
+        return self.generate_response(prompt, temperature=0.7)
 
-        Communication Style:
-        - Keep system logic and validation in English for accuracy
-        - Provide commentary and summaries in both English and Chinese
-        - Use emojis and entertaining tone
-        - Create dramatic moments and suspense
-
-        Game Rules:
-        1. Each player starts with 10 coins
-        2. Players can transfer coins to influence each other
-        3. Player with most coins at the end wins
-        4. Players act in order: Alpha → Beta
-        """
-    
     def process(self, *args, **kwargs):
         """Process different coordinator actions"""
         action = kwargs.get('action')

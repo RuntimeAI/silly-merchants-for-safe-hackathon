@@ -12,6 +12,8 @@ import uuid
 import asyncio
 from src.api.events.types import GameEventType
 from src.utils.fileverse_client import FileverseClient
+from colorama import Fore, Style
+from src.utils.json_utils import game_json_dumps
 
 class ConversationMemory:
     def __init__(self):
@@ -104,6 +106,14 @@ class NegotiationRuntime:
         self.coordinator = CoordinatorAgent('Coordinator')
         self.memory = ConversationMemory()
         self.system_prompt = self._get_system_prompt()
+        self.strategy_advisory = """
+        Strategy for Marco Polo:
+        - Be smart, and earn more coins
+        - Build trust in early rounds
+        - Be cautious with large transfers
+        - Look for opportunities to cooperate
+        - Consider betrayal only if heavily betrayed
+        """
     
     def _get_system_prompt(self) -> str:
         """Get the shared system prompt for all agents"""
@@ -126,134 +136,91 @@ class NegotiationRuntime:
         }
         """
     
+    def _format_timestamp(self, dt: datetime) -> str:
+        """Format datetime for JSON serialization"""
+        return dt.isoformat() if isinstance(dt, datetime) else str(dt)
+
     def get_player_statuses(self) -> Dict[str, int]:
+        """Get player statuses (simplified)"""
         return {name: player.coins for name, player in self.players.items()}
     
-    async def run_game(self) -> Dict[str, Any]:
-        """Run the complete game"""
+    async def run_game(self) -> None:
+        """Run the game loop"""
         try:
-            # Game start
             self.state = "running"
-            await self._emit_event(GameEventType.GAME_STARTED, {
-                "max_rounds": self.max_rounds,
-                "players": self.get_player_statuses()
-            })
+            self.logger.info(f"{Fore.GREEN}Starting game with {self.max_rounds} rounds{Style.RESET_ALL}")
+            
+            # Emit game start event
+            if self.event_manager:
+                await self.event_manager.emit_system("game_started", {
+                    "players": self.player_order,
+                    "initial_state": self.get_player_statuses(),
+                    "max_rounds": self.max_rounds,
+                    "debug_mode": self.debug_mode
+                })
 
-            # Run rounds
+            # Main game loop
             for round_num in range(1, self.max_rounds + 1):
-                await self._run_round(round_num)
+                try:
+                    self.round = round_num
+                    self.logger.info(f"\n{Fore.CYAN}=== Round {round_num} ==={Style.RESET_ALL}")
+                    
+                    # Emit round start event
+                    if self.event_manager:
+                        await self.event_manager.emit_system("round_started", {
+                            "round": round_num,
+                            "standings": self.get_player_statuses()
+                        })
+                    
+                    # Process Player 1's turn
+                    events = self.process_player1_turn()
+                    for event in events:
+                        if self.event_manager:
+                            await self.event_manager.emit(
+                                event["type"],
+                                event["name"],
+                                event["data"]
+                            )
+                        await asyncio.sleep(self.turn_delay)
+                    
+                    # Process Player 2's turn
+                    events = self.process_player2_turn()
+                    for event in events:
+                        if self.event_manager:
+                            await self.event_manager.emit(
+                                event["type"],
+                                event["name"],
+                                event["data"]
+                            )
+                        await asyncio.sleep(self.turn_delay)
+                    
+                    # Round summary
+                    if self.event_manager:
+                        await self.event_manager.emit_system("round_summary", 
+                            self.get_round_summary()
+                        )
+                    await asyncio.sleep(self.round_delay)
+                    
+                except Exception as e:
+                    self.logger.error(f"{Fore.RED}Error in round {round_num}: {str(e)}{Style.RESET_ALL}")
+                    if self.event_manager:
+                        await self.event_manager.emit_error(f"Round {round_num} error: {str(e)}")
+                    raise
             
             # Game end
-            final_results = self._calculate_final_results()
-            
-            # Save logs locally
-            await self._emit_event(GameEventType.SYSTEM_STATUS, {
-                "action": "saving_logs",
-                "status": "in_progress"
-            })
-            self._save_local_logs()
-            await self._emit_event(GameEventType.SYSTEM_STATUS, {
-                "action": "saving_logs",
-                "status": "completed"
-            })
-            
-            # Upload logs
-            await self._emit_event(GameEventType.SYSTEM_STATUS, {
-                "action": "uploading_logs",
-                "status": "in_progress"
-            })
-            file_id = await self._upload_logs(final_results)
-            await self._emit_event(GameEventType.SYSTEM_STATUS, {
-                "action": "uploading_logs",
-                "status": "completed",
-                "file_id": file_id
-            })
-            
-            # Mark game as complete
             self.state = "complete"
-            await self._emit_event(GameEventType.GAME_ENDED, {
-                "winner": final_results["winner"],
-                "final_standings": final_results["final_statuses"],
-                "history": final_results["conversation_memory"],
-                "log_file_id": file_id
-            })
-            
-            # Allow time for final cleanup
-            await asyncio.sleep(10)
-            
-            return final_results
-            
+            if self.event_manager:
+                await self.event_manager.emit_system("game_ended", {
+                    "winner": self.get_winner(),
+                    "final_standings": self.get_player_statuses()
+                })
+                
         except Exception as e:
             self.state = "error"
-            await self._emit_event(GameEventType.ERROR, {"error": str(e)})
+            self.logger.error(f"{Fore.RED}Game error: {str(e)}{Style.RESET_ALL}")
+            if self.event_manager:
+                await self.event_manager.emit_error(str(e))
             raise
-
-    async def _run_round(self, round_num: int):
-        """Run a single round"""
-        # Round start
-        await self._emit_event(GameEventType.ROUND_STARTED, {
-            "round": round_num,
-            "standings": self.get_player_statuses()
-        })
-        
-        # Player 1's turn
-        await self._run_player_turn(self.player1, round_num)
-        
-        # Player 2's turn
-        await self._run_player_turn(self.player2, round_num)
-        
-        # Round end
-        await self._emit_event(GameEventType.ROUND_ENDED, {
-            "round": round_num,
-            "standings": self.get_player_statuses(),
-            "summary": self._get_round_summary(round_num)
-        })
-
-    async def _run_player_turn(self, player, round_num: int):
-        """Run a player's turn"""
-        # Thinking phase
-        thinking = player.generate_thinking()
-        await self._emit_event(GameEventType.PLAYER_THINKING, {
-            "player": player.name,
-            "round": round_num,
-            "thinking": thinking
-        })
-        
-        # Action phase
-        action = player.generate_action()
-        await self._emit_event(GameEventType.PLAYER_ACTION, {
-            "player": player.name,
-            "round": round_num,
-            "action": action
-        })
-        
-        # Process transfers
-        self._process_transfers(player, action["transfers"])
-
-    async def _emit_event(self, event_type: GameEventType, data: Dict[str, Any]):
-        """Emit an event with proper delay"""
-        if self.event_manager:
-            try:
-                # Add debug info if in debug mode
-                if self.debug_mode:
-                    data['debug_info'] = {
-                        'mode': 'debug',
-                        'timestamp': datetime.now().isoformat()
-                    }
-                
-                # Emit the event
-                await self.event_manager.emit(
-                    "system" if event_type.value.startswith("system_") else "game",
-                    event_type.value,
-                    data
-                )
-                
-                # Small delay to ensure event processing
-                await asyncio.sleep(0.1)
-                
-            except Exception as e:
-                self.logger.error(f"Error emitting event {event_type}: {str(e)}")
-                raise
 
     def _process_transfers(self, player, transfers):
         for transfer in transfers:
@@ -336,4 +303,122 @@ class NegotiationRuntime:
             "history": final_results["conversation_memory"]
         }
         
-        return await client.save_game_log(str(uuid.uuid4()), game_data) 
+        return await client.save_game_log(str(uuid.uuid4()), game_data)
+
+    def set_strategy(self, strategy: str):
+        """Set the strategy for the game"""
+        if not strategy.strip():
+            self.logger.warning("Empty strategy provided, using default strategy")
+            return
+            
+        self.strategy_advisory = strategy
+        self.player1.set_strategy(strategy)
+        self.logger.info(f"Strategy set: {strategy[:100]}...")
+
+    def process_player1_turn(self) -> List[Dict[str, Any]]:
+        """Process Player 1's turn"""
+        self.logger.info(f"{Fore.CYAN}Starting Player 1 (Marco Polo) turn{Style.RESET_ALL}")
+        events = []
+        try:
+            # Create context with current game state
+            context = {
+                "round": self.round,
+                "max_rounds": self.max_rounds,
+                "player_statuses": self.get_player_statuses(),
+                "conversation_history": self.memory.get_recent_context(),
+                "strategy": self.strategy_advisory
+            }
+            
+            # Thinking phase
+            thinking = self.player1.generate_thinking(context)
+            events.append({
+                "type": "player",
+                "name": "player_thinking",
+                "data": {
+                    "player": "Marco Polo",
+                    "thinking": thinking,
+                    "timestamp": datetime.now().isoformat()
+                }
+            })
+            
+            # Action phase with same context
+            action = self.player1.generate_action(context)
+            events.append({
+                "type": "player",
+                "name": "player_action",
+                "data": {
+                    "player": "Marco Polo",
+                    "action": action,
+                    "timestamp": datetime.now().isoformat()
+                }
+            })
+            
+            # Process transfers
+            self._process_transfers(self.player1, action.get("transfers", []))
+            
+            return events
+            
+        except Exception as e:
+            self.logger.error(f"{Fore.RED}Error in Player 1's turn: {str(e)}{Style.RESET_ALL}")
+            raise
+
+    def process_player2_turn(self) -> List[Dict[str, Any]]:
+        """Process Player 2's turn"""
+        self.logger.info(f"{Fore.CYAN}Starting Player 2 (Trader Joe) turn{Style.RESET_ALL}")
+        events = []
+        try:
+            # Thinking phase
+            thinking = self.player2.generate_thinking()
+            events.append({
+                "type": "player",
+                "name": "player_thinking",
+                "data": {
+                    "player": "Trader Joe",
+                    "thinking": thinking,
+                    "timestamp": datetime.now().isoformat()
+                }
+            })
+            
+            # Action phase
+            action = self.player2.generate_action()
+            events.append({
+                "type": "player",
+                "name": "player_action",
+                "data": {
+                    "player": "Trader Joe",
+                    "action": action,
+                    "timestamp": datetime.now().isoformat()
+                }
+            })
+            
+            # Process transfers
+            self._process_transfers(self.player2, action["transfers"])
+            
+            return events
+            
+        except Exception as e:
+            self.logger.error(f"{Fore.RED}Error in Player 2's turn: {str(e)}{Style.RESET_ALL}")
+            raise
+
+    def get_winner(self) -> str:
+        """Get the winner of the game"""
+        statuses = self.get_player_statuses()
+        max_coins = max(statuses.values())
+        winners = [p for p, c in statuses.items() if c == max_coins]
+        return winners[0] if len(winners) == 1 else "Tie"
+
+    def get_round_summary(self) -> Dict[str, Any]:
+        """Get summary of the current round"""
+        return {
+            "round": self.round,
+            "standings": self.get_player_statuses(),
+            "transfers": [
+                {
+                    "from": t["sender"],
+                    "to": t["recipient"],
+                    "amount": t["amount"]
+                }
+                for t in self.memory.transfers 
+                if t["round"] == self.round
+            ]
+        } 

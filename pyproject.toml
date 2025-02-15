@@ -9,7 +9,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 pydantic = "^2.0.0"
 python-dotenv = "^1.0.0"
 openai = "^1.0.0"
@@ -23,6 +23,7 @@ python-multipart = "^0.0.6"
 google-cloud-aiplatform = "^1.80.0"
 google-generativeai = "^0.8.4"
 aiohttp = "^3.11.12"
+sse-starlette = "^1.8.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.3.1"
@@ -39,6 +40,7 @@ format = "src.cli:format_code"
 lint = "src.cli:lint_code"
 run-server = "src.api.server:run_server"
 test = "pytest:main"
+play = "src.cli.game_client:run_game"
 
 [build-system]
 requires = ["poetry-core"]

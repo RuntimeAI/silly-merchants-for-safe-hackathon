@@ -3,6 +3,7 @@ import json
 from typing import Dict, Any
 from pathlib import Path
 from datetime import datetime
+import os
 
 # Create default logger instance
 logger = logging.getLogger("default")
@@ -13,37 +14,40 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 class GameLogger:
-    def __init__(self, game_id: str):
-        self.game_id = game_id
-        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    """Custom logger for game events"""
+    def __init__(self, log_id: str, log_dir: str = 'logs'):
+        self.log_id = log_id
+        self.log_dir = log_dir
+        os.makedirs(log_dir, exist_ok=True)
         
-        # Setup file logging
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
-        self.log_file = log_dir / f"game_{game_id}_{self.timestamp}.log"
+        # Set up logger
+        self.logger = logging.getLogger(f"game_{log_id}")
+        self.logger.setLevel(logging.DEBUG)
         
-        # Setup logger
-        self._logger = logging.getLogger(f"game_{game_id}")
-        self._logger.setLevel(logging.INFO)
+        # Create file handler
+        log_file = os.path.join(log_dir, f"{log_id}.log")
+        fh = logging.FileHandler(log_file)
+        fh.setLevel(logging.DEBUG)
         
-        # File handler
-        fh = logging.FileHandler(self.log_file)
-        fh.setLevel(logging.INFO)
-        
-        # Console handler
+        # Create console handler
         ch = logging.StreamHandler()
         ch.setLevel(logging.INFO)
         
-        # Formatter
-        formatter = logging.Formatter('%(message)s')
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
         fh.setFormatter(formatter)
         ch.setFormatter(formatter)
         
-        self._logger.addHandler(fh)
-        self._logger.addHandler(ch)
+        # Add handlers
+        self.logger.addHandler(fh)
+        self.logger.addHandler(ch)
+        
+        self.logger.info(f"Game logger initialized with ID: {log_id}")
         
         self.game_summary = {
-            "game_id": game_id,
+            "game_id": log_id,
             "rounds": [],
             "transfers": [],
             "messages": []
@@ -51,36 +55,36 @@ class GameLogger:
 
     def addHandler(self, handler):
         """Add a handler to the logger"""
-        self._logger.addHandler(handler)
+        self.logger.addHandler(handler)
     
     def removeHandler(self, handler):
         """Remove a handler from the logger"""
-        self._logger.removeHandler(handler)
+        self.logger.removeHandler(handler)
     
-    def info(self, message):
-        """Log an info message"""
-        self._logger.info(message)
+    def info(self, msg: str):
+        self.logger.info(msg)
     
-    def error(self, message):
-        """Log an error message"""
-        self._logger.error(message)
+    def error(self, msg: str):
+        self.logger.error(msg)
     
-    def warning(self, message):
-        """Log a warning message"""
-        self._logger.warning(message)
+    def debug(self, msg: str):
+        self.logger.debug(msg)
+    
+    def warning(self, msg: str):
+        self.logger.warning(msg)
 
     def log_game_start(self, players: Dict[str, Any]):
         message = (
             f"\n{'='*50}\n"
-            f"🎮 Game {self.game_id} Started\n"
-            f"⏰ Time: {self.timestamp}\n"
+            f"🎮 Game {self.log_id} Started\n"
+            f"⏰ Time: {datetime.now().strftime('%Y%m%d_%H%M%S')}\n"
             f"👥 Players:\n"
         )
         for name, data in players.items():
             message += f"  - {name}: {data['coins']} coins\n"
         message += f"{'='*50}\n"
         
-        self._logger.info(message)
+        self.logger.info(message)
         return {"type": "game_start", "content": message}
 
     def log_round_start(self, round_num: int, player_status: Dict[str, Any]):
@@ -94,7 +98,7 @@ class GameLogger:
             message += f"  - {name}: {coins} coins\n"
         message += f"{'='*50}\n"
         
-        self._logger.info(message)
+        self.logger.info(message)
         return {"type": "round_start", "content": message}
 
     def log_player_thinking(self, player: str, thinking: str):
@@ -106,7 +110,7 @@ class GameLogger:
             f"{'='*50}\n"
         )
         
-        self._logger.info(message)
+        self.logger.info(message)
         return {"type": "player_thinking", "content": message}
 
     def log_player_action(self, player: str, action: Dict[str, Any]):
@@ -121,7 +125,7 @@ class GameLogger:
             message += f"  - {transfer['amount']} coins to {transfer['recipient']}\n"
         message += f"{'='*50}\n"
         
-        self._logger.info(message)
+        self.logger.info(message)
         self.game_summary["transfers"].append({
             "round": len(self.game_summary["rounds"]) + 1,
             "from": player,
@@ -143,14 +147,14 @@ class GameLogger:
             message += f"  - {event}\n"
         message += f"{'='*50}\n"
         
-        self._logger.info(message)
+        self.logger.info(message)
         self.game_summary["rounds"].append(summary)
         return {"type": "round_summary", "content": message}
 
     def log_game_end(self) -> Dict[str, Any]:
         message = (
             f"\n{'='*50}\n"
-            f"🏁 Game {self.game_id} Ended\n"
+            f"🏁 Game {self.log_id} Ended\n"
             f"{'='*50}\n"
             f"\nFinal Results:\n"
         )
@@ -174,7 +178,7 @@ class GameLogger:
         
         message += f"\n{'='*50}\n"
         
-        self._logger.info(message)
+        self.logger.info(message)
         return {
             "type": "game_end",
             "content": message,
