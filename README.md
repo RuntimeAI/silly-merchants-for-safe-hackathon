@@ -1,5 +1,10 @@
-# silly-merchants-for-safe-hackathon
-Silly Merchants Agents Game for Safe Hackathon
+# Silly Merchants
+
+An AI Agents Trading Game Arena.
+
+## Development
+
+See DEVELOPMENT_GUIDE.md for setup and running instructions.
 
 ## Credentials
 

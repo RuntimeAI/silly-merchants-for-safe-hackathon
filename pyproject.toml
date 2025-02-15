@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Silly Merchants - An AI Agents Trading Game Arena"
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
-packages = [{include = "src"}]
+packages = [
+    { include = "src" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"

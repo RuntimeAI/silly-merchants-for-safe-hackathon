@@ -48,7 +48,7 @@ spaces:
 
 logging:
   level: INFO
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   directory: logs
 
 network:
@@ -56,11 +56,13 @@ network:
   timeout: 30
   max_retries: 3
   retry_delay: 2
+  host: "0.0.0.0"
+  port: 8000
 
 game:
   max_rounds: 5
-  starting_coins: 10
-  min_transfer: 1
+  initial_balance: 1000
+  trading_fee: 0.01
   players:
     - Alex
     - Blake

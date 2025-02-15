@@ -50,7 +50,7 @@ const GameIntro = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default GameIntro; 
+export default GameIntro 

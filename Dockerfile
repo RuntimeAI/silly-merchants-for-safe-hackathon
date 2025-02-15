@@ -1,34 +1,41 @@
-# Use Python 3.10 slim image as base
-FROM python:3.10-slim
+# Use Python slim image
+FROM python:3.9-slim as base
+
+# Install system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Poetry
-RUN pip install poetry
-
-# Copy poetry files
+# Copy dependency files
 COPY pyproject.toml poetry.lock ./
 
-# Configure poetry to not create virtual environment
-RUN poetry config virtualenvs.create false
+# Development stage
+FROM base as development
 
 # Install dependencies
-RUN poetry install --no-dev --no-interaction --no-ansi
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi
 
 # Copy application code
-COPY src/ ./src/
+COPY . .
 
-# Copy configuration files
-COPY config.yaml .env ./
+# Production stage
+FROM base as production
 
-# Expose port
-EXPOSE 8000
+# Install dependencies (no dev dependencies)
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --no-dev
 
-# Start the application
-CMD ["poetry", "run", "python", "-m", "src.api.server"] 
+# Copy application code
+COPY . .
+
+# Command to run the application
+CMD ["poetry", "run", "uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8000"] 

@@ -1,30 +1,33 @@
 version: '3.8'
 
 services:
-  api:
+  backend:
     build: 
       context: .
       dockerfile: Dockerfile
+      target: production
     ports:
       - "8000:8000"
+    volumes:
+      - ./credentials:/app/credentials:ro
+    env_file:
+      - .env
     environment:
       - PYTHONPATH=/app
       - DEBUG=false
-    env_file:
-      - .env
-    command: poetry run uvicorn src.api.server:app --host 0.0.0.0 --port 8000 --workers 4
     restart: unless-stopped
 
-  web:
+  frontend:
     build:
-      context: ./web
+      context: ./frontend
       dockerfile: Dockerfile
+      target: production
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://backend:8000
     depends_on:
-      - api
+      - backend
     restart: unless-stopped
 
 networks:

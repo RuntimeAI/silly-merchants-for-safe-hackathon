@@ -1,15 +1,14 @@
-version: '3.8'
-
 services:
-  api:
+  backend:
     build: 
       context: .
       dockerfile: Dockerfile
+      target: development
+    volumes:
+      - .:/app
+      - ./credentials:/app/credentials:ro
     ports:
       - "8000:8000"
-    volumes:
-      - ./src:/app/src
-      - ./config.yaml:/app/config.yaml
     environment:
       - PYTHONPATH=/app
       - DEBUG=true
@@ -17,16 +16,22 @@ services:
       - .env
     command: poetry run uvicorn src.api.server:app --host 0.0.0.0 --port 8000 --reload
 
-  web:
+  frontend:
     build:
-      context: ./web
+      context: ./frontend
       dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     ports:
       - "3000:3000"
-    volumes:
-      - ./web/src:/app/src
-      - ./web/public:/app/public
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://backend:8000
     depends_on:
-      - api 
+      - backend
+    command: pnpm dev
+
+networks:
+  default:
+    driver: bridge 

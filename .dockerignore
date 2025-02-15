@@ -10,7 +10,6 @@ __pycache__
 .Python
 env
 pip-log.txt
-pip-delete-this-directory.txt
 .tox
 .coverage
 .coverage.*
@@ -21,12 +20,9 @@ coverage.xml
 *.log
 .pytest_cache
 .mypy_cache
-.hypothesis
-.idea
-.vscode
-*.swp
-*.swo
-*~
-logs/
-web_client/
-node_modules/ 
+node_modules
+dist
+.next
+out
+.env.local
+.env.*.local 
