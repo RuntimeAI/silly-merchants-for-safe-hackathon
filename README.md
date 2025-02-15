@@ -6,6 +6,16 @@
 [![Powered by Gemini](https://img.shields.io/badge/Powered%20by-Gemini%202.0-orange)](https://deepmind.google/technologies/gemini/)
 [![Storage: Fileverse](https://img.shields.io/badge/Storage-Fileverse-green)](https://github.com/wsybok/fileverse_api)
 
+## 🎬 Demo
+
+[![Silly Merchants Demo](https://img.shields.io/badge/Watch%20Demo-YouTube-red)](https://youtu.be/lTv2tHJ1RXI)
+
+Watch our game demo on YouTube to see:
+- Real-time AI negotiations
+- Strategic decision making
+- Game theory in action
+- Fileverse integration
+
 ## 🎯 What is Silly Merchants?
 
 Silly Merchants is an innovative AI trading game where players engage in strategic negotiations and resource exchanges. Set in a medieval marketplace, players take on the roles of legendary merchants like Marco Polo and Trader Joe, each trying to outmaneuver the other through a combination of diplomacy, deception, and strategic trading.
@@ -66,11 +76,46 @@ Developed by TypoX AI, providing:
 - Performance monitoring
 
 ### 📦 Fileverse Integration
-[Fileverse](https://github.com/wsybok/fileverse_api) provides:
-- Decentralized game log storage
-- Conversation history preservation
-- Training data collection
-- IPFS-based permanence
+[Fileverse API](https://github.com/wsybok/fileverse_api) provides:
+
+#### Core Features
+- Decentralized game log storage via IPFS
+- Blockchain-based file management (Gnosis Chain)
+- ERC-4337 Account Abstraction support
+- Secure credential management
+
+#### Custom Implementation
+- **File CRUD Operations**
+  - Automated log file creation
+  - Real-time content updates
+  - Secure file retrieval
+  - Managed deletion
+
+#### Game Integration
+- **Automated Logging**
+  - Game session tracking
+  - Player interactions
+  - Strategic decisions
+  - Transaction history
+
+#### Technical Benefits
+- **Decentralized Storage**
+  - IPFS-based permanence
+  - Blockchain verification
+  - Content-addressed storage
+  - Immutable game records
+
+#### Development Features
+- Docker containerization
+- Advanced logging system
+- Secure environment configuration
+- Pimlico integration for AA transactions
+
+#### Security & Reliability
+- Environment-based credential management
+- Automated backup systems
+- Error handling and recovery
+- Transaction monitoring
 
 ## 🌟 What Makes Silly Merchants Different?
 
@@ -108,9 +153,10 @@ Each game produces:
 
 ## 🏆 Safe Hackathon Demo
 
-Check out our live demo:
-- Agent: [0xc4fdb8516e5a7dfa501ee432df40b8f34ea88b9a](https://gnosisscan.io/address/0xc4fdb8516e5a7dfa501ee432df40b8f34ea88b9a)
-- Example Game Log: [View on IPFS](https://ipfs.io/ipfs/bafkreigr3v3yophf5hwtwujqoxnhre4n2rft4ay6rq7enfffkpuks5dwuu)
+Check out our live demos:
+- [Live Agent Demo](https://agents.fileverse.io/)
+- [Sample Game Log](logs/merchants_1o1/sample.log)
+- [Example Game on IPFS](https://ipfs.io/ipfs/bafkreifahcr3acwomtyuuhoemkqjtto25po23wm5jsdvmvuwjjcpjq22ky)
 
 ## 🤝 Contributing
 

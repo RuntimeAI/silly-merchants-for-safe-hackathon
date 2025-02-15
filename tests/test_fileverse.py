@@ -3,74 +3,67 @@ import logging
 from src.utils.fileverse_client import FileverseClient
 import json
 import requests
+import os
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Use specific test log file
+LOGS_DIR = os.path.join('logs', 'merchants_1o1')
+TEST_LOG_FILE = 'test.log'
+
 async def test_fileverse_upload():
     """Test uploading content to Fileverse"""
     client = FileverseClient()
     
-    # Test data
-    test_game_data = {
-        "timestamp": "2025-02-15T10:30:00.000Z",
-        "winner": "Test Player",
-        "final_standings": {
-            "Test Player": 12,
-            "Bot Player": 8
-        },
-        "history": {
-            "messages": [
-                {
-                    "round": 1,
-                    "speaker": "Test Player",
-                    "message": "Hello, this is a test message"
-                },
-                {
-                    "round": 1,
-                    "speaker": "Bot Player",
-                    "message": "This is a test response"
-                }
-            ],
-            "transfers": [
-                {
-                    "round": 1,
-                    "sender": "Test Player",
-                    "recipient": "Bot Player",
-                    "amount": 2
-                }
-            ]
-        }
-    }
-    
     try:
-        # Test 1: Simple content upload
-        logger.info("\nTest 1: Simple content upload")
-        simple_content = "Hello Fileverse!"
-        response = requests.post(
-            f'{client.base_url}/api/files',
-            headers={'Content-Type': 'application/json'},
-            json={'content': simple_content}
-        )
-        response.raise_for_status()
-        result = response.json()
-        logger.info(f"Upload response: {json.dumps(result, indent=2)}")
+        # Use the test log file
+        log_path = os.path.join(LOGS_DIR, TEST_LOG_FILE)
         
-        # Test 2: Markdown formatting
-        logger.info("\nTest 2: Markdown formatting")
-        markdown = client._format_game_markdown("test-game-id", test_game_data)
-        logger.info(f"Generated markdown:\n{markdown}")
+        if not os.path.exists(log_path):
+            raise Exception(f"Test log file not found: {log_path}")
+            
+        logger.info(f"Using test log file: {log_path}")
         
-        # Test 3: Game log upload
-        logger.info("\nTest 3: Game log upload")
-        file_id = await client.save_game_log("test-game-id", test_game_data)
+        # Read log content
+        with open(log_path, 'r') as f:
+            log_content = f.read()
+            
+        # Generate test game ID
+        test_game_id = f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Prepare test upload data
+        game_data = {
+            "timestamp": datetime.now().isoformat(),
+            "game_id": test_game_id,
+            "log_content": log_content,
+            "metadata": {
+                "game_type": "merchants_1o1",
+                "log_file": TEST_LOG_FILE,
+                "timestamp": datetime.now().isoformat(),
+                "test": True
+            }
+        }
+        
+        # Test upload
+        logger.info("\nTesting game log upload...")
+        file_id = await client.save_game_log(test_game_id, game_data)
         logger.info(f"Successfully uploaded file with ID: {file_id}")
         
-        # Test 4: File retrieval
-        logger.info("\nTest 4: File retrieval")
+        # Test retrieval
+        logger.info("\nTesting file retrieval...")
         retrieved = client.get_file(file_id)
-        logger.info(f"Retrieved file response: {json.dumps(retrieved, indent=2)}")
+        logger.info(f"Retrieved file details: {json.dumps(retrieved, indent=2)}")
+        
+        # Verify content
+        if retrieved and retrieved.get('content'):
+            uploaded_data = json.loads(retrieved['content'])
+            assert uploaded_data['game_id'] == test_game_id, "Game ID mismatch"
+            assert uploaded_data['log_content'] == log_content, "Log content mismatch"
+            assert uploaded_data['metadata']['test'] == True, "Test metadata missing"
+            logger.info("✅ Content verification passed!")
         
         logger.info("\n✅ All tests completed successfully!")
         
@@ -97,7 +90,6 @@ async def test_fileverse_health():
         logger.error(f"❌ Health check failed: {str(e)}")
         raise
 
-# Update main to run both tests
 def main():
     """Run all Fileverse tests"""
     try:

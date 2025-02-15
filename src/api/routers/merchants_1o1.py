@@ -603,24 +603,29 @@ async def upload_game_summary(game_id: str, events: list) -> dict:
         if not os.path.exists(log_file_path):
             raise Exception(f"Log file not found: {log_file_path}")
             
+        # Read the complete log file
         with open(log_file_path, 'r') as f:
             log_content = f.read()
         
-        # Prepare game data with full log content
+        # Prepare upload data with full log content
         game_data = {
             "timestamp": datetime.now().isoformat(),
             "game_id": game_id,
             "log_content": log_content,
-            "events": events,
             "metadata": {
                 "game_type": "merchants_1o1",
                 "log_file": log_filename,
-                "total_events": len(events)
+                "timestamp": datetime.now().isoformat(),
+                "total_events": len(events),
+                "final_state": next((
+                    event["data"] for event in reversed(events)
+                    if event["type"] == "system" and event["name"] == "game_ended"
+                ), None)
             }
         }
         
         # Upload to Fileverse
-        logger.info(f"Uploading game data to Fileverse...")
+        logger.info(f"Uploading game log to Fileverse...")
         file_id = await client.save_game_log(game_id, game_data)
         
         if not file_id:
@@ -628,7 +633,7 @@ async def upload_game_summary(game_id: str, events: list) -> dict:
             
         # Get file details
         file_details = client.get_file(file_id)
-        logger.info(f"File uploaded successfully. ID: {file_id}")
+        logger.info(f"Game log uploaded successfully. ID: {file_id}")
         
         return {
             "ipfs_hash": file_id,
