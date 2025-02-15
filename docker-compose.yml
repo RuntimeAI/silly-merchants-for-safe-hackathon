@@ -2,28 +2,31 @@ version: '3.8'
 
 services:
   api:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      - FILEVERSE_API_URL=https://api.singha.today
-      - DEBUG_MODE=false
-      - LOG_LEVEL=INFO
-      - GAME_ROUNDS=5
     volumes:
-      - ./logs:/app/logs
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped 
+      - ./src:/app/src
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=true
+    env_file:
+      - .env
+    command: poetry run uvicorn src.api.server:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on:
+      - api 

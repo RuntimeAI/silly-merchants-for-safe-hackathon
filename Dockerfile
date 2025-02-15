@@ -1,3 +1,4 @@
+# Use Python 3.10 slim image as base
 FROM python:3.10-slim
 
 # Set working directory
@@ -6,26 +7,28 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN pip install poetry
 
-# Copy project files
+# Copy poetry files
 COPY pyproject.toml poetry.lock ./
-COPY src ./src
-COPY config.yaml ./
+
+# Configure poetry to not create virtual environment
+RUN poetry config virtualenvs.create false
 
 # Install dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi
+RUN poetry install --no-dev --no-interaction --no-ansi
 
-# Copy environment variables
-COPY .env ./
+# Copy application code
+COPY src/ ./src/
+
+# Copy configuration files
+COPY config.yaml .env ./
 
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["poetry", "run", "python", "-m", "src.main"] 
+# Start the application
+CMD ["poetry", "run", "python", "-m", "src.api.server"] 
