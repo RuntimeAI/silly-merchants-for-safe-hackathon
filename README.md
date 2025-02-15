@@ -8,7 +8,13 @@
 
 ## 🎬 Demo
 
-[![Silly Merchants Demo](https://img.shields.io/badge/Watch%20Demo-YouTube-red)](https://youtu.be/lTv2tHJ1RXI)
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=lTv2tHJ1RXI">
+    <img src="https://img.youtube.com/vi/lTv2tHJ1RXI/maxresdefault.jpg" alt="Silly Merchants Demo" style="width:100%;max-width:720px;">
+    <br>
+    <img src="https://img.shields.io/badge/▶%20Watch%20Demo-YouTube-red" alt="Watch Demo">
+  </a>
+</div>
 
 Watch our game demo on YouTube to see:
 - Real-time AI negotiations
