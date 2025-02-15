@@ -3,6 +3,12 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
 
 class Config:
     _instance = None
@@ -11,12 +17,43 @@ class Config:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Config, cls).__new__(cls)
+            # Initialize private variables
+            cls._instance._debug_mode = False
+            cls._instance._log_level = 'INFO'
+            cls._instance._game_rounds = 5
+            cls._instance._fileverse_api_url = 'https://api.singha.today'
         return cls._instance
     
     def __init__(self):
         if not self._initialized:
+            # Load environment variables
+            self._debug_mode = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
+            self._log_level = os.getenv('LOG_LEVEL', 'INFO')
+            self._game_rounds = int(os.getenv('GAME_ROUNDS', '5'))
+            self._fileverse_api_url = os.getenv('FILEVERSE_API_URL', 'https://api.singha.today')
+            
+            # Then load config
             self._load_config()
             self._initialized = True
+            
+            if self.debug_mode:
+                logger.info("🐛 Running in DEBUG mode")
+    
+    @property
+    def debug_mode(self) -> bool:
+        return self._debug_mode
+    
+    @property
+    def log_level(self) -> str:
+        return self._log_level
+    
+    @property
+    def game_rounds(self) -> int:
+        return self._game_rounds
+    
+    @property
+    def fileverse_api_url(self) -> str:
+        return self._fileverse_api_url
     
     def _load_config(self):
         """Load configuration from .env and config.yaml"""
@@ -61,11 +98,14 @@ class Config:
         return key
     
     def get_space_config(self, space_name: str) -> Dict[str, Any]:
-        """Get configuration for a specific space"""
-        spaces = self._config.get('spaces', {})
-        if space_name not in spaces:
-            raise ValueError(f"No configuration found for space: {space_name}")
-        return spaces[space_name]
+        """Get configuration for a specific game space"""
+        if space_name == 'merchants_1o1':
+            return {
+                'players': ['Marco Polo', 'Trader Joe'],
+                'initial_coins': 10,
+                'rounds': self._game_rounds if not self._debug_mode else 2
+            }
+        raise ValueError(f"Unknown space: {space_name}")
     
     @property
     def llm_config(self) -> Dict[str, Any]:
@@ -104,4 +144,9 @@ class Config:
                     "temperature": 0.7
                 }
             }
-        } 
+        }
+
+    @property
+    def game_rounds(self) -> int:
+        """Get number of game rounds based on mode"""
+        return 2 if self.debug_mode else 5 

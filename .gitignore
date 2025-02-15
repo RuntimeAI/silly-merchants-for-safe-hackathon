@@ -204,3 +204,11 @@ node_modules/
 .next/
 out/
 .DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# But keep the example file
+!.env.example

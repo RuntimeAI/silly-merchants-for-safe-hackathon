@@ -5,40 +5,60 @@ import StrategyPanel from '../components/StrategyPanel';
 import BargainBazaar from '../components/BargainBazaar';
 
 export default function Home() {
+  const [gameId, setGameId] = useState<string | null>(null);
   const [gameEvents, setGameEvents] = useState<any[]>([]);
   const [isGameRunning, setIsGameRunning] = useState(false);
 
+  const createGame = async () => {
+    const response = await fetch('http://localhost:8000/merchants_1o1/games', {
+      method: 'POST'
+    });
+    const data = await response.json();
+    setGameId(data.game_id);
+  };
+
   const startGame = async (strategy: string) => {
+    if (!gameId) {
+      console.error('No game ID');
+      return;
+    }
+
     setIsGameRunning(true);
     setGameEvents([]);
 
     try {
-      const response = await fetch('http://localhost:8000/merchants_1o1/initiate', {
+      // Start game
+      await fetch(`http://localhost:8000/merchants_1o1/games/${gameId}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy_advisory: strategy })
+        body: JSON.stringify({ strategy })
       });
 
-      const reader = response.body?.getReader();
-      if (!reader) return;
+      // Subscribe to events
+      const eventSource = new EventSource(
+        `http://localhost:8000/merchants_1o1/games/${gameId}/events`
+      );
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      eventSource.onmessage = (event) => {
+        const eventData = JSON.parse(event.data);
+        setGameEvents(prev => [...prev, eventData]);
+      };
 
-        const text = new TextDecoder().decode(value);
-        const events = text.split('\n\n')
-          .filter(line => line.startsWith('data: '))
-          .map(line => JSON.parse(line.replace('data: ', '')));
+      eventSource.onerror = (error) => {
+        console.error('EventSource error:', error);
+        eventSource.close();
+        setIsGameRunning(false);
+      };
 
-        setGameEvents(prev => [...prev, ...events]);
-      }
     } catch (error) {
       console.error('Error:', error);
-    } finally {
       setIsGameRunning(false);
     }
   };
+
+  useEffect(() => {
+    createGame();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-900 text-cyan-300">

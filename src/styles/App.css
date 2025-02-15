@@ -1,0 +1,43 @@
+.app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+}
+
+.create-game-btn {
+    display: block;
+    margin: 20px auto;
+    padding: 12px 24px;
+    font-size: 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.create-game-btn:hover {
+    background-color: #0056b3;
+}
+
+.create-game-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.error-message {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 12px;
+    border-radius: 4px;
+    margin: 20px auto;
+    max-width: 400px;
+    text-align: center;
+} 

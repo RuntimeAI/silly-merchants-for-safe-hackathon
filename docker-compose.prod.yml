@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - FILEVERSE_API_URL=https://api.singha.today
+      - DEBUG_MODE=false
+      - LOG_LEVEL=INFO
+      - GAME_ROUNDS=5
+    volumes:
+      - ./logs:/app/logs
+    deploy:
+      mode: replicated
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - game_network
+
+networks:
+  game_network:
+    driver: overlay 

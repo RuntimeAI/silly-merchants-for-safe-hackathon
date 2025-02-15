@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import Dict, Optional, List, Any, AsyncGenerator
 import uuid
 import logging
@@ -11,6 +11,9 @@ from src.spaces.merchants_1o1.runtime.negotiation import NegotiationRuntime
 from datetime import datetime
 from src.utils.logger import GameLogger
 from src.utils.json_utils import game_json_dumps  # Add this import
+from ..events.manager import GameEventManager
+import os
+from src.utils.fileverse_client import FileverseClient
 
 # Setup router logger
 logger = logging.getLogger("merchants_1o1_router")
@@ -22,10 +25,14 @@ executor = ThreadPoolExecutor(max_workers=4)
 router = APIRouter(prefix="/merchants_1o1", tags=["merchants_1o1"])
 
 # Store active games
-active_games: Dict[str, NegotiationRuntime] = {}
+active_games: Dict[str, tuple[NegotiationRuntime, GameEventManager]] = {}
+
+# Initialize fileverse client
+fileverse = FileverseClient()
 
 class GameInitRequest(BaseModel):
     strategy_advisory: str
+    debug_mode: Optional[bool] = False
 
 class GameMessage(BaseModel):
     round: int
@@ -49,6 +56,9 @@ class GameResponse(BaseModel):
     conversation_history: Optional[List[Dict[str, Any]]] = None
     transfer_history: Optional[List[Dict[str, Any]]] = None
     log_messages: List[str] = []
+
+class GameStartRequest(BaseModel):
+    strategy_advisory: str
 
 async def process_game_in_thread(game: NegotiationRuntime):
     """Run game in a thread and return result"""
@@ -159,157 +169,143 @@ async def game_stream(game: NegotiationRuntime) -> AsyncGenerator[str, None]:
     finally:
         # Cleanup
         game.logger.removeHandler(queue_handler)
-        if game_id := next((id for id, g in active_games.items() if g == game), None):
+        if game_id := next((id for id, g in active_games.items() if g[0] == game), None):
             del active_games[game_id]
 
-@router.post("/initiate")
-async def initiate_game(request: GameInitRequest):
+@router.post("/games")
+async def create_game(
+    background_tasks: BackgroundTasks,
+    debug: Optional[bool] = False
+):
+    """Create a new game"""
+    # Set debug mode in environment BEFORE creating anything
+    if debug:
+        os.environ['DEBUG_MODE'] = 'true'
+        logger.info("🐛 Creating game in DEBUG mode")
+    else:
+        os.environ['DEBUG_MODE'] = 'false'
+    
+    game_id = str(uuid.uuid4())
+    event_manager = GameEventManager(game_id)
+    game_logger = GameLogger(game_id)
+    
+    # Initialize game with event manager
+    game = NegotiationRuntime(logger=game_logger, event_manager=event_manager)
+    active_games[game_id] = (game, event_manager)
+    
+    # Log the actual number of rounds
+    logger.info(f"Game created with {game.max_rounds} rounds (Debug mode: {debug})")
+    
+    # Emit initial game state
+    await event_manager.emit_system("game_created", {
+        "game_id": game_id,
+        "status": "created",
+        "debug_mode": debug,
+        "max_rounds": game.max_rounds,
+        "players": {
+            "Marco Polo": {"coins": 10},
+            "Trader Joe": {"coins": 10}
+        }
+    })
+    
+    return {
+        "game_id": game_id, 
+        "debug_mode": debug,
+        "max_rounds": game.max_rounds
+    }
+
+@router.post("/games/{game_id}/start")
+async def start_game(game_id: str, request: GameStartRequest):
+    """Start a game with the given ID"""
+    logger.info(f"Starting game: {game_id} with request: {request}")  # Add request logging
+    
+    if game_id not in active_games:
+        logger.warning(f"Game not found: {game_id}")
+        raise HTTPException(404, "Game not found")
+    
     try:
-        game_id = str(uuid.uuid4())
-        game_logger = GameLogger(game_id)
-        game = NegotiationRuntime(logger=game_logger)
+        game, event_manager = active_games[game_id]
         
-        # Store game
-        active_games[game_id] = game
+        # Emit game start event
+        await event_manager.emit_system("game_started", {
+            "game_id": game_id,
+            "strategy": request.strategy_advisory
+        })
         
-        async def event_stream():
-            try:
-                # Game start event
-                yield {
-                    "event": "game_start",
-                    "data": {
-                        "game_id": game_id,
-                        "players": {
-                            "Marco Polo": {"coins": 10},
-                            "Trader Joe": {"coins": 10}
-                        },
-                        "timestamp": datetime.now().isoformat()
-                    }
-                }
-
-                # Process each round
-                for round_num in range(1, 6):
-                    # Round start
-                    yield {
-                        "event": "round_start",
-                        "data": {
-                            "round": round_num,
-                            "standings": game.get_player_statuses(),
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    }
-
-                    # Player 1's turn
-                    # Deep thinking (private)
-                    thinking = game.player1.generate_thinking()
-                    yield {
-                        "event": "player_thinking",
-                        "data": {
-                            "round": round_num,
-                            "player": "Marco Polo",
-                            "thinking": thinking,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    }
-                    
-                    # Action
-                    action = game.player1.generate_action()
-                    yield {
-                        "event": "player_action",
-                        "data": {
-                            "round": round_num,
-                            "player": "Marco Polo",
-                            "message": action["message"],
-                            "transfers": action["transfers"],
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    }
-
-                    # Process transfers
-                    game.process_transfers(game.player1, action["transfers"])
-                    
-                    # Player 2's turn (similar structure)
-                    thinking = game.player2.generate_thinking()
-                    yield {
-                        "event": "player_thinking",
-                        "data": {
-                            "round": round_num,
-                            "player": "Trader Joe",
-                            "thinking": thinking,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    }
-                    
-                    action = game.player2.generate_action()
-                    yield {
-                        "event": "player_action",
-                        "data": {
-                            "round": round_num,
-                            "player": "Trader Joe",
-                            "message": action["message"],
-                            "transfers": action["transfers"],
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    }
-                    
-                    game.process_transfers(game.player2, action["transfers"])
-
-                    # Round summary
-                    yield {
-                        "event": "round_summary",
-                        "data": {
-                            "round": round_num,
-                            "standings": game.get_player_statuses(),
-                            "transfers": game.memory.transfers[-2:],  # Last 2 transfers
-                            "messages": game.memory.messages[-2:],    # Last 2 messages
-                            "timestamp": datetime.now().isoformat()
-                        }
-                    }
-
-                    await asyncio.sleep(1)  # Pause between rounds
-
-                # Game end
-                final_status = game.get_player_statuses()
-                winner = max(final_status.items(), key=lambda x: x[1])[0]
-                
-                yield {
-                    "event": "game_end",
-                    "data": {
-                        "winner": winner,
-                        "final_standings": final_status,
-                        "history": {
-                            "transfers": game.memory.transfers,
-                            "messages": game.memory.messages
-                        },
-                        "timestamp": datetime.now().isoformat()
-                    }
-                }
-
-            except Exception as e:
-                yield {
-                    "event": "error",
-                    "data": {
-                        "message": str(e),
-                        "timestamp": datetime.now().isoformat()
-                    }
-                }
-
-        async def format_events():
-            async for event in event_stream():
-                yield f"data: {game_json_dumps(event)}\n\n"  # Use custom encoder
-
-        return StreamingResponse(
-            format_events(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
-            }
-        )
-
+        # Run game in background
+        background_tasks = BackgroundTasks()
+        background_tasks.add_task(run_game, game_id)
+        
+        return {
+            "game_id": game_id,
+            "status": "started",
+            "message": "Game started successfully"
+        }
+        
+    except ValidationError as e:  # Add specific error handling
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(422, detail=str(e))
     except Exception as e:
-        raise HTTPException(500, f"Error initiating game: {str(e)}")
+        logger.error(f"Error starting game: {str(e)}")
+        raise HTTPException(500, f"Error starting game: {str(e)}")
+
+@router.get("/games/{game_id}/events")
+async def stream_events(game_id: str):
+    """Stream game events"""
+    if game_id not in active_games:
+        raise HTTPException(404, "Game not found")
+    
+    game, event_manager = active_games[game_id]
+    
+    async def event_generator():
+        try:
+            # Send initial keepalive
+            yield ":\n\n"
+            
+            # Stream events
+            async for event in event_manager.subscribe():
+                yield event
+                
+        except Exception as e:
+            logger.error(f"Error streaming events: {str(e)}")
+            # Send error event
+            error_event = {
+                "type": "error",
+                "name": "stream_error",
+                "data": {"error": str(e)},
+                "timestamp": datetime.now().isoformat()
+            }
+            yield f"data: {game_json_dumps(error_event)}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Content-Type': 'text/event-stream',
+            'X-Accel-Buffering': 'no'  # Disable proxy buffering
+        }
+    )
+
+async def run_game(game_id: str):
+    """Run game and emit events"""
+    game, event_manager = active_games[game_id]
+    
+    try:
+        # Run the complete game
+        await game.run_game()
+        
+    except Exception as e:
+        logger.error(f"Error in game {game_id}: {str(e)}")
+        await event_manager.emit_error(str(e))
+    
+    finally:
+        # Cleanup after sufficient delay
+        await asyncio.sleep(10)
+        if game_id in active_games:
+            logger.info(f"Cleaning up game {game_id}")
+            del active_games[game_id]
 
 @router.get("/{game_id}/status")
 async def get_game_status(game_id: str):
@@ -320,7 +316,7 @@ async def get_game_status(game_id: str):
         raise HTTPException(404, "Game not found")
     
     try:
-        game = active_games[game_id]
+        game, _ = active_games[game_id]
         standings = game.get_player_statuses()
         logs = game.get_logs()
         
@@ -346,8 +342,8 @@ async def run_game(game_id: str):
         raise HTTPException(404, "Game not found")
     
     try:
-        game = active_games[game_id]
-        result = game.run()
+        game, _ = active_games[game_id]
+        result = await game.run_game()
         logger.info(f"Game completed. Result: {result}")
         
         # Clean up finished game
