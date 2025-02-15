@@ -84,6 +84,11 @@ Developed by TypoX AI, providing:
 ### 📦 Fileverse Integration
 [Fileverse API](https://github.com/wsybok/fileverse_api) provides:
 
+#### Game Log Demo
+<div align="center">
+  <img src="demo/fileverse_log_demo.png" alt="Fileverse Game Log Demo" style="width:100%;max-width:800px;border-radius:8px;margin:20px 0">
+</div>
+
 #### Core Features
 - Decentralized game log storage via IPFS
 - Blockchain-based file management (Gnosis Chain)
